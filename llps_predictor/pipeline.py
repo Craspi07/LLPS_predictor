@@ -33,43 +33,36 @@ def _sigmoid(x: float, center: float = 0.0, scale: float = 1.0) -> float:
 
 def _compute_ensemble(features: dict) -> dict:
     """
-    Combine individual scores into a weighted ensemble LLPS propensity score
-    in the range [0, 1].
+    Combine individual scores into an ensemble LLPS propensity score in [0, 1].
 
-    Component normalisation strategy
-    ---------------------------------
-    disorder_fraction   : already 0-1; weight 0.25
-    catGRANULE          : sigmoid centred at 0 (decision boundary), scale 1.5; weight 0.20
-    LLPhyScore approx   : sigmoid centred at 0.04 (typical threshold), scale 0.02; weight 0.15
-    PScore approx       : sigmoid centred at 0.5, scale 0.3; weight 0.15
-    PSAP enrichment     : already 0-1 (G/S/Q/N/Y fraction); weight 0.10
-    |SCD|               : sigmoid centred at 5, scale 3; weight 0.10
-    Low complexity      : already 0-1; weight 0.05
+    Each component is first normalised independently to [0, 1]:
+      disorder_fraction : already 0-1
+      catGRANULE        : sigmoid centred at 0 (decision boundary), scale 1.5
+      LLPhyScore approx : sigmoid centred at 0.04, scale 0.02
+      PScore approx     : sigmoid centred at 0.5, scale 0.3
+      PSAP enrichment   : already 0-1 (G/S/Q/N/Y fraction)
+      |SCD|             : sigmoid centred at 5, scale 3
+      Low complexity    : already 0-1
+
+    The final score is the simple (unweighted) average of all normalised
+    component scores — i.e. the mean rank across all metrics.
     """
-    dis = features["disorder"]["disordered_fraction"]                    # 0-1
-    catg = _sigmoid(features["catgranule"]["catgranule_score"], 0, 1.5)  # 0-1
-    llphy = _sigmoid(features["llphyscore"]["llphyscore_approx"], 0.04, 0.02)
-    pscore = _sigmoid(features["pi"]["pscore_approx"], 0.5, 0.3)
-    psap = features["enrichment"]["psap_enrichment"]                     # 0-1
-    scd_norm = _sigmoid(abs(features["charge"]["scd"]), 5.0, 3.0)
-    lc = features["enrichment"]["low_complexity_score"]                  # 0-1
-
-    weights = {
-        "disorder":    (dis,       0.25),
-        "catgranule":  (catg,      0.20),
-        "llphyscore":  (llphy,     0.15),
-        "pscore":      (pscore,    0.15),
-        "psap":        (psap,      0.10),
-        "scd":         (scd_norm,  0.10),
-        "low_complexity": (lc,     0.05),
+    components = {
+        "disorder":       features["disorder"]["disordered_fraction"],
+        "catgranule":     _sigmoid(features["catgranule"]["catgranule_score"], 0, 1.5),
+        "llphyscore":     _sigmoid(features["llphyscore"]["llphyscore_approx"], 0.04, 0.02),
+        "pscore":         _sigmoid(features["pi"]["pscore_approx"], 0.5, 0.3),
+        "psap":           features["enrichment"]["psap_enrichment"],
+        "scd":            _sigmoid(abs(features["charge"]["scd"]), 5.0, 3.0),
+        "low_complexity": features["enrichment"]["low_complexity_score"],
     }
 
-    ensemble = sum(score * weight for score, weight in weights.values())
+    ensemble = sum(components.values()) / len(components)
 
     return {
         "ensemble_score": round(ensemble, 4),
-        "component_scores": {k: round(v[0], 4) for k, v in weights.items()},
-        "component_weights": {k: v[1] for k, v in weights.items()},
+        "component_scores": {k: round(v, 4) for k, v in components.items()},
+        "n_components": len(components),
     }
 
 

@@ -87,23 +87,25 @@ def print_report(result: dict, console: Optional[object] = None) -> None:
     console.print()
 
     # ── Ensemble Component Table ──────────────────────────────────────────
-    comp_table = Table(title="Ensemble Score Components", box=box.SIMPLE_HEAVY, show_header=True)
-    comp_table.add_column("Component", style="cyan", width=20)
-    comp_table.add_column("Normalised Score", justify="right", width=18)
-    comp_table.add_column("Weight", justify="right", width=10)
-    comp_table.add_column("Contribution", justify="right", width=14)
+    n_comp = scoring["ensemble"].get("n_components", 7)
+    comp_table = Table(
+        title=f"Ensemble Components — Average Rank ({n_comp} metrics, equal weight)",
+        box=box.SIMPLE_HEAVY,
+        show_header=True,
+    )
+    comp_table.add_column("Rank", justify="right", width=6)
+    comp_table.add_column("Component", style="cyan", width=22)
+    comp_table.add_column("Normalised Score [0–1]", justify="right", width=24)
 
     components = scoring["ensemble"]["component_scores"]
-    weights = scoring["ensemble"]["component_weights"]
-    for comp, score in sorted(components.items(), key=lambda x: -x[1]):
-        w = weights[comp]
-        contrib = score * w
+    for rank, (comp, score) in enumerate(
+        sorted(components.items(), key=lambda x: -x[1]), start=1
+    ):
         colour_c = _score_colour(score)
         comp_table.add_row(
+            str(rank),
             comp.replace("_", " ").title(),
             f"[{colour_c}]{score:.4f}[/{colour_c}]",
-            f"{w:.2f}",
-            f"{contrib:.4f}",
         )
     console.print(comp_table)
 
